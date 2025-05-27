@@ -3,7 +3,6 @@ package main;
 import java.io.IOException;
 
 import constants.Config;
-import database.Database;
 import endpoint.HTTPEndpoint;
 import scores.GetScores;
 

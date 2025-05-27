@@ -1,8 +1,10 @@
 package scores;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
@@ -12,16 +14,20 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import database.Database;
 import network.ApiRequester;
+import network.ApiRequester.Method;
 
 public class GetScores {
 	
 	private final Database db;
-	private final ConcurrentLinkedQueue<String> queue;
-	private ApiRequester api;
+	private final ConcurrentLinkedQueue<SimpleEntry<String, Integer>> queue;
+	private final ConcurrentLinkedQueue<SimpleEntry<String, Integer>> mutualQueue;
+	
+	private Map<String, String> status = new HashMap<String, String>();
 	
 	private volatile boolean isProcessing = false;
+	private volatile boolean isProcessingMutual = false;
 	
-	public static String ApiKey;
+	private static String ApiKey;
 	
 	public GetScores() {
 		db = new Database();
@@ -29,23 +35,78 @@ public class GetScores {
 		db.connect();
 		
 		queue = new ConcurrentLinkedQueue<>();
+		mutualQueue = new ConcurrentLinkedQueue<>();
 	}
 	
 	private void getUserMostPlayed() {
-		// TODO
 		while(true) {
+			
+			if(queue.peek() == null ) {
+				return;
+			}
+			
+			SimpleEntry<String, Integer> user = queue.poll();
+			String QueueUser = user.getKey();
+			int UserOffset = user.getValue();
+			
+			System.out.println("Fetching maps for user " + QueueUser + " with offset " + UserOffset + "...");
+			
+			String endpoint = "https://osu.ppy.sh/users/" + QueueUser + "/beatmapsets/most_played?limit=100&offset=" + UserOffset;
+			
+			ApiRequester api = new ApiRequester();
+			api.setRequestMethod(Method.GET);
+			api.setEndpoint(endpoint);
+			
+			String apiresponse = "";
+			
+			try {
+				apiresponse = api.request();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			JsonNode root = null;
+			
+	        ObjectMapper mapper = new ObjectMapper();
+	        try {
+	        	root = mapper.readTree(apiresponse);
+			} catch (JsonProcessingException e) {
+				e.printStackTrace();
+			}
+	        
+	        if (root == null || !root.isArray() || root.size() == 0) {
+	        	System.out.println("Finished fetching all played maps from Player " + QueueUser);
+	        	setStatus("finished_maps", QueueUser);
+	        	
+	        	continue;
+	        } else {
+		    	queue.add(new SimpleEntry<>(QueueUser, UserOffset + 100));
+	        }
+	        
+			
+			String insertScoreQ = "INSERT into UserMostPlayed (user_id, map_id) values (:user_id, :map_id)";
+			for (JsonNode node : root) {
+			    Map<String, Object> insertScoreB = new HashMap<>();
+			    insertScoreB.put("map_id", node.get("beatmap_id").asInt());
+			    insertScoreB.put("user_id", QueueUser);
+
+			    db.query2(insertScoreQ, insertScoreB);
+			}
 
 			try {
-				Thread.sleep(10);
+				Thread.sleep(1000);
 			} catch (InterruptedException e) {
-				e.printStackTrace();
+				e.printStackTrace();	
 			}
 		}
 	}
 	
+	private void fetchMutualMaps() {
+		//TODO
+	}
+	
 	public void checkForMostPlayedJob() throws InterruptedException {
 		while (true) {
-			System.out.println(queue.isEmpty());
 			if (!queue.isEmpty() && !isProcessing) {
 				isProcessing = true;
 				
@@ -57,14 +118,25 @@ public class GetScores {
 					}
 				});
 				thread.start();
+				
+				if(!mutualQueue.isEmpty() && !isProcessingMutual) {
+					Thread thread2 = new Thread(() -> {
+						try {
+							fetchMutualMaps();
+						} finally {
+							isProcessingMutual = false;
+						}
+					});
+					thread2.start();
+				}
 			}
+			
 			Thread.sleep(1000);
-			System.out.println("check");
 		}
 	}
 	
 	public Map<String, Object> getScores(String player1, String player2) throws JsonProcessingException {
-	    String queryExist = "SELECT count(1) as count FROM UserMostPlayed WHERE ((user_id = :player1) OR (user_id = :player2))";
+	    String queryExist = "SELECT count(1) as count FROM UserScores WHERE ((user_id = :player1) OR (user_id = :player2))";
 
 	    Map<String, Object> bindsExist = new HashMap<>();
 	    bindsExist.put("player1", player1);
@@ -76,8 +148,8 @@ public class GetScores {
 	    	result.put("response", getRandomMutualMap(player1, player2));
 	    	
 	    } else {
-	    	queue.add(player1);
-	    	queue.add(player2);
+	    	queue.add(new SimpleEntry<>(player1, 0));
+	    	queue.add(new SimpleEntry<>(player2, 0));
 	    	
 	    	System.out.println(queue);
 	    	
@@ -101,5 +173,17 @@ public class GetScores {
 
         ObjectMapper mapper = new ObjectMapper();
         return mapper.writeValueAsString(results);
+	}
+	
+	public void setStatus(String status, String user) {
+		this.status.put(user, status);
+	}
+	
+	public String getStatus(String user) {
+		return this.status.get(user).toString();
+	}
+	
+	public static void setApiKey(String key) {
+		ApiKey = key;
 	}
 }
