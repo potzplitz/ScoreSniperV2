@@ -21,6 +21,9 @@ public class Database {
 	private static String pass;
 	private Connection conn;
 	
+	private Map<String, Object> bindParams = new HashMap<>();
+	private List<Map<String, Object>> resultList = new ArrayList<>();
+	
 	public static void setMariaUser(String MariaUser) {
 		user = MariaUser;
 	}
@@ -89,12 +92,12 @@ public class Database {
 	    return resultList;
 	}
 	
-	public List<Map<String, Object>> query2(String sql, Map<String, Object> binds) {
-	    List<Map<String, Object>> resultList = new ArrayList<>();
-
+	public void query2(String sql) {
+		resultList.clear();
+		
 	    if (conn == null) {
 	        System.err.println("No DB connection established. => use connect() first!");
-	        return resultList;
+	        return;
 	    }
 
 	    List<Object> orderedValues = new ArrayList<>();
@@ -105,11 +108,11 @@ public class Database {
 
 	    while (matcher.find()) {
 	        String paramName = matcher.group(1);
-	        if (!binds.containsKey(paramName)) {
+	        if (!bindParams.containsKey(paramName)) {
 	            throw new IllegalArgumentException("Missing bind parameter: " + paramName);
 	        }
 
-	        orderedValues.add(binds.get(paramName));
+	        orderedValues.add(bindParams.get(paramName));
 	        matcher.appendReplacement(parsedSql, "?");
 	    }
 	    matcher.appendTail(parsedSql);
@@ -135,8 +138,15 @@ public class Database {
 	    } catch (SQLException e) {
 	        e.printStackTrace();
 	    }
-
-	    return resultList;
+		bindParams.clear();
+	}
+	
+	public void bindValue(String bindname, Object value) {
+		this.bindParams.put(bindname, value);
+	}
+	
+	public List<Map<String, Object>> result() {
+		return resultList;
 	}
 
 }

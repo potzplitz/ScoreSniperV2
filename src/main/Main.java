@@ -15,15 +15,6 @@ public class Main {
 		
 		GetScores getscores = new GetScores();
 
-		Thread ScoreThread = new Thread(() -> {
-			try {
-				getscores.checkForMostPlayedJob();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		});
-		ScoreThread.start();
-
 		Thread HTTPThread = new Thread(() -> {
 			try {
 				HTTPEndpoint http = new HTTPEndpoint(getscores);

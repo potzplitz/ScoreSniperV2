@@ -17,15 +17,10 @@ public class HTTPEndpoint {
 	
 	private HttpServer server;
 	private final GetScores scores;
-	private final Database db;
 	
 	public HTTPEndpoint(GetScores sharedScores) throws IOException {
 		server = HttpServer.create(new InetSocketAddress(7727), 0);
 		scores = sharedScores;
-		
-		db = new Database();
-		db.setDatabase("ScoreSniper");
-		db.connect();
 	}
 	
 	public void listen() throws IOException {
@@ -52,6 +47,8 @@ public class HTTPEndpoint {
 	    return exchange -> {
 	        String query = exchange.getRequestURI().getQuery();
 	        Map<String, String> queryParams = parseQuery(query);
+	        
+			System.out.println("accepted connection from IP " + exchange.getRemoteAddress() + " with endpoint /" + responseText);
 	        
 	        if(responseText.equals("snipe")) {
 		        String player1 = queryParams.getOrDefault("player1", "not provided");

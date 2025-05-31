@@ -11,4 +11,5 @@ module ScoreSniper {
 	requires com.fasterxml.jackson.databind;
 	requires java.net.http;
 	requires org.json;
+	requires com.fasterxml.jackson.core;
 }
