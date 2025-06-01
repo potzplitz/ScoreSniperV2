@@ -30,7 +30,7 @@ public class ApiRequester {
 	public void setRequestMethod(Method method) {	
 		this.method = method;
 	}
-	
+
     public String request() throws Exception {
         HttpClient client = HttpClient.newHttpClient();
 

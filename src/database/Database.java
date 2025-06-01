@@ -64,7 +64,7 @@ public class Database {
 	}
 	
 	public List<Map<String, Object>> query(String sql) {
-	    List<Map<String, Object>> resultList = new ArrayList<>();
+	    resultList.clear();
 
 	    if (conn == null) {
 	        System.err.println("No DB connection established. => use connect() first!");
@@ -80,7 +80,7 @@ public class Database {
 	        while (rs.next()) {
 	            Map<String, Object> row = new HashMap<>();
 	            for (int i = 1; i <= columnCount; i++) {
-	                row.put(meta.getColumnName(i), rs.getObject(i));
+	                row.put(meta.getColumnLabel(i).toLowerCase(), rs.getObject(i));
 	            }
 	            resultList.add(row);
 	        }
@@ -129,7 +129,7 @@ public class Database {
 	            while (rs.next()) {
 	                Map<String, Object> row = new HashMap<>();
 	                for (int i = 1; i <= columnCount; i++) {
-	                    row.put(meta.getColumnName(i), rs.getObject(i));
+	                	row.put(meta.getColumnLabel(i).toLowerCase(), rs.getObject(i));
 	                }
 	                resultList.add(row);
 	            }

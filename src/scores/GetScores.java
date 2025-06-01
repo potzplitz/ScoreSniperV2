@@ -1,7 +1,10 @@
 package scores;
 
 import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -12,16 +15,19 @@ import org.json.JSONObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 import database.Database;
 import network.ApiRequester;
 import network.ApiRequester.Method;
+import tools.Mod;
 
 public class GetScores {
-	
-	private Database db;
+
 	private ConcurrentLinkedQueue<SimpleEntry<SimpleEntry<String, Integer>, SimpleEntry<String, Integer>>> mostPlayedQueue;
 	private ConcurrentLinkedQueue<SimpleEntry<SimpleEntry<String, Integer>, SimpleEntry<String, Integer>>> mutualQueue;
+	private ConcurrentLinkedQueue<String> recentQueue = new ConcurrentLinkedQueue<>();
+	private ConcurrentLinkedQueue<String> registerQueue = new ConcurrentLinkedQueue<>();
 	
 	private final Map<String, Boolean> finishedUsers = new HashMap<>();
 	private final Map<String, Boolean> mostPlayedProcessing = new ConcurrentHashMap<>();
@@ -33,9 +39,6 @@ public class GetScores {
 	private static String ApiKey = "";
 	
 	public GetScores() {
-	    db = new Database();
-	    db.setDatabase("ScoreSniper");
-	    db.connect();
 	    
 	    mostPlayedQueue = new ConcurrentLinkedQueue<>();
 	    mutualQueue = new ConcurrentLinkedQueue<>();
@@ -56,6 +59,15 @@ public class GetScores {
 	            }
 	        }
 	    }).start();
+	    
+	    new Thread(() -> {
+	        try {
+	            RecentScores();
+	        } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+	    }).start();
+
 	}
 	
 	private String getPairKey(String player1, String player2) {
@@ -66,29 +78,61 @@ public class GetScores {
 		ApiKey = key;
 	}
 	
-	public Map<String, Object> getScores(String player1, String player2) throws JsonProcessingException {
+	public Map<String, Object> getScores(String player1, String player2, String random) throws JsonProcessingException {
 	    String queryExist = "SELECT (select count(1) from UserMostPlayed where user_id = :player1) as exist_1, (select count(1) from UserMostPlayed where user_id = :player2) as exist_2";
-
+	    String queryRegistered = "SELECT * from RegisteredUsers where user_id = :user_id";  
+	       
+	    Database db = new Database();
+	    db.setDatabase("ScoreSniper");
+	    db.connect();
+	    
+	    db.bindValue("user_id", player1);
+	    db.query2(queryRegistered);
+	    
+	    boolean empty_player1 = false;
+	    boolean empty_player2 = false;
+	    
+	    if(db.result().isEmpty()) {
+	    	registerQueue.add(player1);
+	    	empty_player1 = true;
+	    }
+	    
+	    db.bindValue("user_id", player2);
+	    db.query2(queryRegistered);
+	    
+	    if(db.result().isEmpty()) {
+	    	registerQueue.add(player2);
+	    	empty_player2 = true;
+	    }
+	    
+	    if(empty_player1 || empty_player2) {
+            new Thread(() -> {
+                try {
+                	registerNewUser();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    isProcessing = false;
+                }
+            }).start();
+	    }
+	    
 	    db.bindValue("player1", player1);
 	    db.bindValue("player2", player2);
 	    db.query2(queryExist);
-
-	    System.out.println(mostPlayedQueue);
 
 	    Map<String, Object> result = new HashMap<>();
 	    String pairKey = getPairKey(player1, player2);
 
 	    if (Integer.parseInt(db.result().get(0).get("exist_1").toString()) > 0 &&
-	        Integer.parseInt(db.result().get(0).get("exist_2").toString()) > 0) {
-
-	        System.out.println(status);
+	        Integer.parseInt(db.result().get(0).get("exist_2").toString()) > 0) {  	
 
 	        if (status.containsKey(player1)) {
-	            result.put("response", status.get(player1));
+	            result.put("response", "{\"message\":\"" + status.get(player1) + ".\"}");
 	        } else if (status.containsKey(player2)) {
-	            result.put("response", status.get(player2));
+	        	result.put("response", "{\"message\":\"" + status.get(player2) + ".\"}");
 	        } else {
-	            result.put("response", getRandomMutualMap(player1, player2));
+	            result.put("response", getRandomMutualMap(player1, player2, random));
 	        }
 
 	        return result;
@@ -123,14 +167,60 @@ public class GetScores {
 	            setStatus(player2, "Already fetching data for " + player2);
 	        }
 
-	        result.put("response", "Fetching user(s)...");
+	        result.put("response", "{\"message\":\"Fetching user(s)...\"}");
 	    }
-
+	    db.close();
 	    return result;
+	}
+	
+	private void registerNewUser() {
+		Database db = new Database();
+		db.setDatabase("ScoreSniper");
+		db.connect();
+		
+		String insertRegister = "insert into RegisteredUsers (user_id, username, last_updated) values (:user_id, :username, current_timestamp)";
+			
+		while(!registerQueue.isEmpty()) {
+			String player = registerQueue.poll();
+			String response = "";
+			
+			ApiRequester api = new ApiRequester();
+			api.setEndpoint("https://osu.ppy.sh/api/get_user");
+			
+			Map<String, String> parameters = new HashMap<>();
+			parameters.put("k", ApiKey);
+			parameters.put("u", player);
+			
+			api.setParameters(parameters);
+			try {
+				response = api.request();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			System.out.println(response);
+			
+			JSONArray jsonArray = new JSONArray(response);
+			if (jsonArray.length() > 0) {
+			    JSONObject json = jsonArray.getJSONObject(0);
+			    String username = json.getString("username");
+			    
+			    db.bindValue("user_id", player);
+			    db.bindValue("username", username);
+			    db.query2(insertRegister);
+			}
+	        
+		}
+		
+		db.close();
 	}
 	
 	private void getMutualScores() {
 	    SimpleEntry<SimpleEntry<String, Integer>, SimpleEntry<String, Integer>> entry;
+	    
+	    Database db = new Database();
+	    db.setDatabase("ScoreSniper");
+	    db.connect();
 
 	    while ((entry = mutualQueue.poll()) != null) {
 	        String player1 = entry.getKey().getKey();
@@ -249,6 +339,7 @@ public class GetScores {
 	            )
 	        );
 	    }
+	    db.close();
 	}
 	
 	private String requestMap(String player, String map_id) {
@@ -315,7 +406,6 @@ public class GetScores {
 	        }
 
 	        if (finished1 && finished2) {
-	            System.out.println("finished both");
 	            
 	            String pairKey = getPairKey(player1, player2);
 	            mostPlayedProcessing.remove(pairKey);
@@ -349,10 +439,136 @@ public class GetScores {
 	    }
 	}
 
+	private void getLatestPlayed() throws JsonProcessingException {
+	    Database db = new Database();
+	    db.setDatabase("ScoreSniper");
+	    db.connect();
+	    
+	    ApiRequester api = new ApiRequester();
+	    api.setRequestMethod(Method.GET);
+	    
+	    String queryMostPlayed = "INSERT into UserMostPlayed (user_id, map_id) values (:user_id, :map_id)";
+	    String insertScores = "INSERT IGNORE INTO UserScores (score_id, score, map_id, user_id, maxcombo, perfect, date, rank, enabled_mods) "
+	    	    + "VALUES (:score_id, :score, :map_id, :user_id, :maxcombo, :perfect, :date, :rank, :enabled_mods)";
+	    
+	    String player = "";
+	    
+	    while(!recentQueue.isEmpty()) {
+	    	player = recentQueue.poll();
+	    	
+	    	System.out.println("updating outdated user...");
+
+		    ObjectMapper mapper = new ObjectMapper();
+
+		    int offset = 0;
+		    boolean moreScores = true;
+
+		    while (moreScores) {
+		        String endpoint = "https://osu.ppy.sh/users/" + player + "/scores/recent?mode=osu&limit=100&offset=" + offset;
+		        api.setEndpoint(endpoint);
+
+		        String response = "";
+		        try {
+		            response = api.request();
+		        } catch (Exception e) {
+		            e.printStackTrace();
+		            break;
+		        }
+
+		        if (response.equalsIgnoreCase("[]")) {
+		            break;
+		        }
+
+		        JsonNode root = mapper.readTree(response);
+		        if (root == null || !root.isArray() || root.size() == 0) {
+		            break;
+		        }
+
+		        for (JsonNode node : root) {
+		            db.bindValue("user_id", player);
+		            db.bindValue("map_id", node.get("beatmap_id").asInt());
+		            db.query2(queryMostPlayed);
+
+		            List<String> modList = new ArrayList<>();
+		            for (JsonNode mod : node.get("mods")) {
+		                modList.add(mod.asText());
+		            }
+		            int mods = Mod.convertModsToBitmask(modList);
+
+		            db.bindValue("score_id", node.get("id").asLong());
+		            db.bindValue("score", node.get("legacy_total_score").asLong());
+		            db.bindValue("map_id", node.get("beatmap_id").asLong());
+		            db.bindValue("user_id", Long.parseLong(player));
+		            db.bindValue("maxcombo", node.get("max_combo").asInt());
+		            db.bindValue("perfect", node.get("legacy_perfect").asBoolean());
+		            
+		            String createdAtRaw = node.get("ended_at").asText();
+		            String createdAtSqlFormat = java.time.OffsetDateTime
+		                .parse(createdAtRaw)
+		                .toLocalDateTime()
+		                .toString().replace('T', ' ');
+
+		            db.bindValue("date", createdAtSqlFormat);
+		            
+		            db.bindValue("rank", node.get("rank").asText());
+		            db.bindValue("enabled_mods", mods);
+		            
+		            System.out.println("inserting scores...");
+
+		            db.query2(insertScores);
+		        }
+
+		        offset += 100;
+		    }
+		    String updateUpdated = "UPDATE RegisteredUsers set last_updated = current_timestamp where user_id = :user_id";
+		    db.bindValue("user_id", player);
+		    
+		    db.query2(updateUpdated);
+	    }
+
+	    db.close();
+	}
+
+	
+	public void RecentScores() {
+		String query = "SELECT user_id FROM RegisteredUsers WHERE last_updated < NOW() - INTERVAL 1 HOUR";
+		
+		Database db = new Database();
+		db.setDatabase("ScoreSniper");
+		db.connect();
+		
+		while(true) {
+			db.query(query);
+			
+			if(!db.result().isEmpty()) {
+				for(int i = 0; i < db.result().size(); i++) {
+					recentQueue.add(db.result().get(i).get("user_id").toString());
+				}
+				
+			    new Thread(() -> {
+			        try {
+						getLatestPlayed();
+					} catch (JsonProcessingException e) {
+						e.printStackTrace();
+					}
+			    }).start();
+			}
+			
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}
 
 	private boolean fetchAndInsertMostPlayed(String userId, int offset) {
 	    String endpoint = "https://osu.ppy.sh/users/" + userId + "/beatmapsets/most_played?limit=100&offset=" + offset;
 	    String insertScoreQ = "INSERT INTO UserMostPlayed (user_id, map_id) VALUES (:user_id, :map_id)";	    
+	    
+	    Database db = new Database();
+	    db.setDatabase("ScoreSniper");
+	    db.connect();
 
 	    try {
 	        ApiRequester api = new ApiRequester();
@@ -379,40 +595,113 @@ public class GetScores {
 	    } catch (Exception e) {
 	        System.err.println("Error processing user " + userId + ": " + e.getMessage());
 	        finishedUsers.put(userId, true);
+	        db.close();
 	        return true;
 	    }
-
+	    db.close();
 	    return false;
 	}
 	
-	private String getRandomMutualMap(String player1, String player2) throws JsonProcessingException {
-		
-		System.out.println("Requested map for " + player1 + " and " + player2);
-		
-		String randomSql = "SELECT a.map_id, a.user_id AS user_player, a.score AS score_player, a.maxcombo AS maxcombo_player, a.perfect AS perfect_player, a.date AS date_player, a.rank AS rank_player, a.enabled_mods AS mods_player, b.user_id AS user_target, b.score AS score_target, b.maxcombo AS maxcombo_target, b.perfect AS perfect_target, b.date AS date_target, b.rank AS rank_target, b.enabled_mods AS mods_target FROM UserScores a JOIN UserScores b ON a.map_id = b.map_id WHERE a.user_id = :player2 AND b.user_id = :player1 AND a.score < b.score order by rand() limit 1";
-		
-		Map<String, Object> randomBinds = new HashMap<>();
-		randomBinds.put("player1", player1);
-		randomBinds.put("player2", player2);
-		
-		db.bindValue("player1", player1);
-		db.bindValue("player2", player2);
-		
-		db.query2(randomSql);
+	private String getRandomMutualMap(String player1, String player2, String random) throws JsonProcessingException {
+	    System.out.println("Requested map(s) for " + player1 + " and " + player2 + " (random=" + random + ")");
+	    
+	    Database db = new Database();
+	    db.setDatabase("ScoreSniper");
+	    db.connect();
 
-        ObjectMapper mapper = new ObjectMapper();
-        
-        String resultString = mapper.writeValueAsString(db.result());
-        
-        if(resultString.equals("[]")) {
-        	resultString = "{\"message\":\"" + player1 + " has no scores better than " + player2 + ".\"}";
-        }
-        
-        System.out.println(resultString);
-        
-        return resultString;
+	    boolean randomMode = "1".equals(random);
+
+	    String sql = "SELECT a.map_id, " +
+	            "a.user_id AS user_player, a.score AS score_player, a.maxcombo AS maxcombo_player, " +
+	            "a.perfect AS perfect_player, a.date AS date_player, a.rank AS rank_player, a.enabled_mods AS mods_player, " +
+	            "b.user_id AS user_target, b.score AS score_target, b.maxcombo AS maxcombo_target, " +
+	            "b.perfect AS perfect_target, b.date AS date_target, b.rank AS rank_target, b.enabled_mods AS mods_target " +
+	            "FROM UserScores a " +
+	            "JOIN UserScores b ON a.map_id = b.map_id " +
+	            "WHERE a.user_id = :player2 AND b.user_id = :player1 AND a.score < b.score ";
+
+	    if (randomMode) {
+	        sql += "ORDER BY rand() LIMIT 1";
+	    }
+
+	    db.bindValue("player1", player1);
+	    db.bindValue("player2", player2);
+	    db.query2(sql);
+
+	    List<Map<String, Object>> result = db.result();
+
+	    if (result.isEmpty()) {
+	        return new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(
+	            Map.of("error", "no mutual beatmap where player1 < player2")
+	        );
+	    }
+
+	    ObjectMapper mapper = new ObjectMapper();
+	    mapper.enable(SerializationFeature.INDENT_OUTPUT);
+
+	    if (randomMode) {
+	        Map<String, Object> row = result.get(0);
+
+	        Map<String, Object> response = new LinkedHashMap<>();
+	        response.put("map_id", row.get("map_id"));
+
+	        Map<String, Object> playerData = new LinkedHashMap<>();
+	        playerData.put("user_id", row.get("user_player"));
+	        playerData.put("score", Long.parseLong(row.get("score_player").toString()));
+	        playerData.put("maxcombo", row.get("maxcombo_player"));
+	        playerData.put("perfect", row.get("perfect_player"));
+	        playerData.put("date", row.get("date_player"));
+	        playerData.put("rank", row.get("rank_player"));
+	        playerData.put("mods", row.get("mods_player"));
+
+	        Map<String, Object> targetData = new LinkedHashMap<>();
+	        targetData.put("user_id", row.get("user_target"));
+	        targetData.put("score", Long.parseLong(row.get("score_target").toString()));
+	        targetData.put("maxcombo", row.get("maxcombo_target"));
+	        targetData.put("perfect", row.get("perfect_target"));
+	        targetData.put("date", row.get("date_target"));
+	        targetData.put("rank", row.get("rank_target"));
+	        targetData.put("mods", row.get("mods_target"));
+
+	        response.put("player", playerData);
+	        response.put("target", targetData);
+
+	        return mapper.writeValueAsString(response);
+	    } else {
+	        List<Map<String, Object>> output = new ArrayList<>();
+
+	        for (Map<String, Object> row : result) {
+	            Map<String, Object> map = new LinkedHashMap<>();
+	            map.put("map_id", row.get("map_id"));
+
+	            Map<String, Object> playerData = new LinkedHashMap<>();
+	            playerData.put("user_id", row.get("user_player"));
+	            playerData.put("score", Long.parseLong(row.get("score_player").toString()));
+	            playerData.put("maxcombo", row.get("maxcombo_player"));
+	            playerData.put("perfect", row.get("perfect_player"));
+	            playerData.put("date", row.get("date_player"));
+	            playerData.put("rank", row.get("rank_player"));
+	            playerData.put("mods", row.get("mods_player"));
+
+	            Map<String, Object> targetData = new LinkedHashMap<>();
+	            targetData.put("user_id", row.get("user_target"));
+	            targetData.put("score", Long.parseLong(row.get("score_target").toString()));
+	            targetData.put("maxcombo", row.get("maxcombo_target"));
+	            targetData.put("perfect", row.get("perfect_target"));
+	            targetData.put("date", row.get("date_target"));
+	            targetData.put("rank", row.get("rank_target"));
+	            targetData.put("mods", row.get("mods_target"));
+
+	            map.put("player", playerData);
+	            map.put("target", targetData);
+
+	            output.add(map);
+	        }
+	        db.close();
+	        return mapper.writeValueAsString(output);
+	    }
 	}
-	
+
 	public void setStatus(String player, String message) {
 		if (this.status.containsKey(player)) {
 		    this.status.replace(player, message);

@@ -51,10 +51,20 @@ public class HTTPEndpoint {
 			System.out.println("accepted connection from IP " + exchange.getRemoteAddress() + " with endpoint /" + responseText);
 	        
 	        if(responseText.equals("snipe")) {
-		        String player1 = queryParams.getOrDefault("player1", "not provided");
-		        String player2 = queryParams.getOrDefault("player2", "not provided");
+		        String player1 = queryParams.getOrDefault("player", "not provided");
+		        String player2 = queryParams.getOrDefault("target", "not provided");
 		        
-		        scoreresponse = scores.getScores(player1, player2);
+		        String random = queryParams.getOrDefault("random", "not provided");
+		        
+		        if (!random.equalsIgnoreCase("0") && !random.equalsIgnoreCase("1")) {
+		            scoreresponse.put("response", "{\"error\":\"random parameter must be 0 or 1\"}");
+		        } else {
+		            if (!player1.equalsIgnoreCase("not provided") && !player2.equalsIgnoreCase("not provided")) {
+		                scoreresponse = scores.getScores(player2, player1, random);
+		            } else {
+		                scoreresponse.put("response", "{\"error\":\"invalid request parameters\"}");
+		            }
+		        }		       		        
 	        }
 
 	        String finalResponse = scoreresponse.get("response").toString();
