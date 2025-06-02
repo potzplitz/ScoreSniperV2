@@ -1,3 +1,4 @@
 src/constants/Config.java
 *.class
 /target/
+*.class
