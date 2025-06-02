@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -31,7 +32,7 @@ public class GetScores {
 	private ConcurrentLinkedQueue<String> registerQueue = new ConcurrentLinkedQueue<>();
 	private final Map<String, Boolean> stillFetching = new ConcurrentHashMap<>();
 	
-	private final Map<String, Boolean> finishedUsers = new HashMap<>();
+	private final Set<String> finishedUsers = ConcurrentHashMap.newKeySet();
 	private final Map<String, Boolean> mostPlayedProcessing = new ConcurrentHashMap<>();
 	
 	private Map<String, String> status = new HashMap<>();
@@ -405,8 +406,8 @@ public class GetScores {
 	        
 	        log("Fetching maps for users " + player1 + "(" + offset1 + ") and " + player2 + "(" + offset2 + ")");
 	        	        
-	        boolean finished1 = finishedUsers.getOrDefault(player1, false);
-	        boolean finished2 = finishedUsers.getOrDefault(player2, false);
+	        boolean finished1 = finishedUsers.contains(player1);
+	        boolean finished2 = finishedUsers.contains(player2);
 	        
 	        if (!finished1) {
 	            long start = System.currentTimeMillis();
@@ -435,9 +436,6 @@ public class GetScores {
 	                new SimpleEntry<>(player1, 0),
 	                new SimpleEntry<>(player2, 0)
 	            ));
-	            
-	            finishedUsers.remove(player1);
-	            finishedUsers.remove(player2);
 	            continue;
 	        }
 
@@ -613,7 +611,7 @@ public class GetScores {
 
 	        if (!root.isArray() || root.size() == 0) {
 	            log("No more most played maps for user " + userId);
-	            finishedUsers.put(userId, true);
+	            finishedUsers.add(userId);
 	            return true;
 	            
 	        }
@@ -627,7 +625,7 @@ public class GetScores {
 
 	    } catch (Exception e) {
 	        System.err.println("Error processing user " + userId + ": " + e.getMessage());
-	        finishedUsers.put(userId, true);
+	        finishedUsers.add(userId);
 	        db.close();
 	        return true;
 	        

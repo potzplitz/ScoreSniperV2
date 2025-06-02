@@ -12,11 +12,11 @@ public class CommandManager {
 		commands.put(name.toLowerCase(), command);
 	}
 	
-	public void execute(String name, String[] args) {
+	public void execute(String name, String[] args, Scanner sc) {
 		Command cmd = commands.get(name.toLowerCase());
 		
         if (cmd != null) {
-            cmd.execute(args, this);
+            cmd.execute(args, this, sc);
         } else {
             System.out.println("unknown command: " + name + ". type 'help' for a list of commands!");
         }
@@ -27,21 +27,20 @@ public class CommandManager {
 	}
 	
 	public void startCommandListener() {
-		
-		System.out.print("> ");
-		
-		CommandList cmdlist = new CommandList();
-		cmdlist.registerCommands(this);
-		
-		Scanner sc = new Scanner(System.in);
-		String currentCommand = "";
-		
-		while(true) {
-			currentCommand = sc.next();
-			if(!currentCommand.equals("")) {
-				execute(currentCommand, new String[]{});
-				System.out.print("\n> ");
-			}
-		}
+	    System.out.print("> ");
+
+	    CommandList cmdlist = new CommandList();
+	    cmdlist.registerCommands(this);
+
+	    Scanner sc = new Scanner(System.in);
+
+	    while (true) {
+	        String currentCommand = sc.next();
+
+	        if (!currentCommand.isEmpty()) {
+	            execute(currentCommand, new String[]{}, sc);
+	            System.out.print("\n> ");
+	        }
+	    }
 	}
 }

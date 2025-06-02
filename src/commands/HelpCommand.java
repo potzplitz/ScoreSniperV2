@@ -2,11 +2,12 @@ package commands;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 
 public class HelpCommand implements Command{
 
 	@Override
-	public void execute(String[] args, CommandManager cmd) {
+	public void execute(String[] args, CommandManager cmd, Scanner sc) {
         List<String> commandNames = new ArrayList<>(cmd.getCommands().keySet());
         
 		System.out.println("Avaliable commands: ");

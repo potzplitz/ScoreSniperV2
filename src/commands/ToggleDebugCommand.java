@@ -1,5 +1,7 @@
 package commands;
 
+import java.util.Scanner;
+
 import scores.GetScores;
 
 public class ToggleDebugCommand implements Command {
@@ -7,7 +9,7 @@ public class ToggleDebugCommand implements Command {
     private boolean toggle = false;
 
     @Override
-    public void execute(String[] args, CommandManager cmd) {
+    public void execute(String[] args, CommandManager cmd, Scanner sc) {
         toggle = !toggle;
 
         GetScores.setDebugOutput(toggle);
