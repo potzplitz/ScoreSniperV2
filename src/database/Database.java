@@ -47,7 +47,6 @@ public class Database {
 
 	    try {
 	        this.conn = DriverManager.getConnection(jdbcUrl, user, pass);
-	        System.out.println("Successfully connected to Database: " + db);
 	    } catch (SQLException e) {
 	        e.printStackTrace();
 	    }

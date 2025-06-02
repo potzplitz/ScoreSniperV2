@@ -39,6 +39,7 @@ public class GetScores {
 	private volatile boolean isProcessing = false;
 	
 	private static String ApiKey = "";
+	private static boolean toggle;
 	
 	public GetScores() {
 	    
@@ -221,8 +222,8 @@ public class GetScores {
 				e.printStackTrace();
 			}
 			
-			System.out.println(response);
-			
+			log(response);
+
 			JSONArray jsonArray = new JSONArray(response);
 			if (jsonArray.length() > 0) {
 			    JSONObject json = jsonArray.getJSONObject(0);
@@ -263,12 +264,7 @@ public class GetScores {
 	        db.query2(mutualMapsQ);
 
 	        if (db.result().isEmpty()) {
-	            System.out.println("No mutual maps found for " + player1 + " and " + player2);
-	            continue;
-	        }
-	        
-	        if (offset1 >= db.result().size()) {
-	            System.out.printf("Offset %d exceeds mutual map count (%d) for %s vs %s\n", offset1, db.result().size(), player1, player2);
+	            log("No mutual maps found for " + player1 + " and " + player2);
 	            continue;
 	        }
 
@@ -297,7 +293,7 @@ public class GetScores {
             }
 
 	        if (response1 == null || response2 == null) {
-	            System.out.println("no maps");
+	            log("no maps");
 	            continue;
 	        }
 
@@ -305,7 +301,8 @@ public class GetScores {
 	        JSONArray parsed2 = new JSONArray(response2);
 
 	        if (parsed1.isEmpty() || parsed2.isEmpty()) {
-	            System.out.println("One of the players has no score on map " + map_id);
+
+	            log("One of the players has no score on map " + map_id);
 
 	            if (offset1 + 1 < db.result().size()) {
 	                mutualQueue.add(
@@ -319,7 +316,7 @@ public class GetScores {
 	            	status.remove(player2);
 	            	stillFetching.remove(getPairKey(player1, player2));
 	            	
-	                System.out.printf("Finished all mutual maps for %s and %s\n", player1, player2);
+	            	log("Finished all mutual maps for " + player1 + " and " + player2);
 	            }
 	            continue;
 	        }
@@ -352,9 +349,9 @@ public class GetScores {
 	        db.bindValue("map_id", Integer.parseInt(map_id));
 
 	        db.query2(insertScoresQ);
-
-	        System.out.println("Inserted score with ID " + score1.getString("score_id") + " for User ID " + score1.getString("user_id"));
-	        System.out.println("Inserted score with ID " + score2.getString("score_id") + " for User ID " + score2.getString("user_id"));
+	        
+	        log("Inserted score with ID " + score1.getString("score_id") + " for User ID " + score1.getString("user_id"));
+	        log("Inserted score with ID " + score2.getString("score_id") + " for User ID " + score2.getString("user_id"));
 
 	        mutualQueue.add(
 	            new SimpleEntry<>(
@@ -386,7 +383,7 @@ public class GetScores {
 			e.printStackTrace();
 		}
 		
-		System.out.println("https://osu.ppy.sh/api/get_scores?k=" + ApiKey + "&b=" + map_id + "&u=" + player);
+		log("https://osu.ppy.sh/api/get_scores?k=" + ApiKey + "&b=" + map_id + "&u=" + player);
 		
 		return response;
 	}
@@ -396,7 +393,7 @@ public class GetScores {
 	    while (true) {
 	        var entry = mostPlayedQueue.poll();
 	        if (entry == null) {
-	            System.out.println("MostPlayedQueue is empty, exiting thread.");
+	            log("MostPlayedQueue is empty, exiting thread.");
 	            break;
 	        }
 
@@ -405,8 +402,8 @@ public class GetScores {
 
 	        int offset1 = entry.getKey().getValue();
 	        int offset2 = entry.getValue().getValue();
-
-	        System.out.printf("Fetching maps for users %s (%d) and %s (%d)%n", player1, offset1, player2, offset2);
+	        
+	        log("Fetching maps for users " + player1 + "(" + offset1 + ") and " + player2 + "(" + offset2 + ")");
 	        	        
 	        boolean finished1 = finishedUsers.getOrDefault(player1, false);
 	        boolean finished2 = finishedUsers.getOrDefault(player2, false);
@@ -481,8 +478,8 @@ public class GetScores {
 	    
 	    while(!recentQueue.isEmpty()) {
 	    	player = recentQueue.poll();
-	    	
-	    	System.out.println("updating outdated user...");
+
+	    	log("updating outdated user...");
 
 		    ObjectMapper mapper = new ObjectMapper();
 
@@ -547,7 +544,7 @@ public class GetScores {
 		            db.bindValue("rank", node.get("rank").asText());
 		            db.bindValue("enabled_mods", mods);
 		            
-		            System.out.println("inserting scores...");
+		            log("inserting scores...");
 
 		            db.query2(insertScores);
 		        }
@@ -615,7 +612,7 @@ public class GetScores {
 	        JsonNode root = mapper.readTree(apiResponse);
 
 	        if (!root.isArray() || root.size() == 0) {
-	            System.out.println("No more most played maps for user " + userId);
+	            log("No more most played maps for user " + userId);
 	            finishedUsers.put(userId, true);
 	            return true;
 	            
@@ -641,7 +638,7 @@ public class GetScores {
 	}
 	
 	private String getRandomMutualMap(String player1, String player2, String random) throws JsonProcessingException {
-	    System.out.println("Requested map(s) for " + player1 + " and " + player2 + " (random=" + random + ")");
+	    log("Requested map(s) for " + player1 + " and " + player2 + " (random=" + random + ")");
 
 	    String pairKey = getPairKey(player1, player2);
 	    boolean isStillFetching = stillFetching.getOrDefault(pairKey, false);
@@ -763,8 +760,18 @@ public class GetScores {
 
 	}
 	
+	private void log(String message) {
+	    if (toggle) {
+	        System.out.println("[" + java.time.LocalDateTime.now() + "][" + Thread.currentThread().getName() + "] " + message);
+	    }
+	}
+	
 	public String getStatus(String player) {
 		return this.status.get(player);
+	}
+	
+	public static void setDebugOutput(boolean debug) {
+		toggle = debug;
 	}
 
 }

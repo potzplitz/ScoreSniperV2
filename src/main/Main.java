@@ -2,6 +2,7 @@ package main;
 
 import java.io.IOException;
 
+import commands.CommandManager;
 import constants.Config;
 import endpoint.HTTPEndpoint;
 import scores.GetScores;
@@ -24,6 +25,17 @@ public class Main {
 			}
 		});
 		HTTPThread.start();
+		
+		Thread commandThread = new Thread(new Runnable() {
+
+			@Override
+			public void run() {
+				CommandManager cmd = new CommandManager();
+				cmd.startCommandListener();
+			}
+			
+		});
+		commandThread.start();
 
 	}
 }
