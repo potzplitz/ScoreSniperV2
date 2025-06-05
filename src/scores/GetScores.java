@@ -659,35 +659,14 @@ public class GetScores {
 
 	    boolean randomMode = "1".equals(random);
 
-	    String sql = "SELECT " +
-	    	    "a.map_id, " +
-	    	    "a.score_id AS score_id_player, " +
-	    	    "a.score AS score_player, " +
-	    	    "a.user_id AS user_player, " +
-	    	    "a.maxcombo AS maxcombo_player, " +
-	    	    "a.perfect AS perfect_player, " +
-	    	    "a.date AS date_player, " +
-	    	    "a.rank AS rank_player, " +
-	    	    "a.enabled_mods AS mods_player, " +
-	    	    "b.score_id AS score_id_target, " +
-	    	    "b.score AS score_target, " +
-	    	    "b.user_id AS user_target, " +
-	    	    "b.maxcombo AS maxcombo_target, " +
-	    	    "b.perfect AS perfect_target, " +
-	    	    "b.date AS date_target, " +
-	    	    "b.rank AS rank_target, " +
-	    	    "b.enabled_mods AS mods_target, " +
-	    	    "mp.beatmapset_id, " +
-	    	    "mp.artist, " +
-	    	    "mp.creator, " +
-	    	    "mp.title, " +
-	    	    "mp.version, " +
-	    	    "mp.difficulty_rating " +
-	    	    "FROM UserScores a " +
-	    	    "JOIN UserScores b ON a.map_id = b.map_id " +
-	    	    "JOIN UserMostPlayed mp ON mp.map_id = a.map_id " +
-	    	    "WHERE a.user_id = :player2 AND b.user_id = :player1 AND a.score < b.score ";
-
+	    String sql = "SELECT a.map_id, a.score_id AS score_id_player, a.score AS score_player, a.user_id AS user_player, "
+	            + "a.maxcombo AS maxcombo_player, a.perfect AS perfect_player, a.date AS date_player, a.rank AS rank_player, "
+	            + "a.enabled_mods AS mods_player, b.score_id AS score_id_target, b.score AS score_target, b.user_id AS user_target, "
+	            + "b.maxcombo AS maxcombo_target, b.perfect AS perfect_target, b.date AS date_target, b.rank AS rank_target, "
+	            + "b.enabled_mods AS mods_target, mp.beatmapset_id, mp.artist, mp.creator, mp.title, mp.version, mp.difficulty_rating "
+	            + "FROM UserScores a JOIN UserScores b ON a.map_id = b.map_id JOIN (SELECT DISTINCT map_id, beatmapset_id, artist, "
+	            + "creator, title, version, difficulty_rating FROM UserMostPlayed) mp ON mp.map_id = a.map_id "
+	            + "WHERE a.user_id = :player2 AND b.user_id = :player1 AND a.score < b.score;";
 
 	    if (randomMode) {
 	        sql += "ORDER BY rand() LIMIT 1";

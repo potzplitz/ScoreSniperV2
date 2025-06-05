@@ -10,8 +10,6 @@ public class HelpCommand implements Command{
 	public void execute(String[] args, CommandManager cmd, Scanner sc) {
         List<String> commandNames = new ArrayList<>(cmd.getCommands().keySet());
         
-		System.out.println("Avaliable commands: ");
-
 		for(int i = 0; i < commandNames.size(); i++) {
 			System.out.print(commandNames.get(i) + "\n");
 		}

@@ -14,8 +14,6 @@ public class ListUsersCommand implements Command{
 		
 		db.query("SELECT * from RegisteredUsers");
 		
-		System.out.println("Registered Users: ");
-		
 		for(int i = 0; i < db.result().size(); i++) {
 			System.out.println(db.result().get(i).get("username"));
 		}
